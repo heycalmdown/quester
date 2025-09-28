@@ -17,7 +17,7 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     // Private keys (only available on server-side)
-    openaiApiKey: process.env.OPENAI_API_KEY,
+    openaiApiKey: '',
 
     // Public keys (exposed to client-side)
     public: {
@@ -35,6 +35,8 @@ export default defineNuxtConfig({
         target: 'esnext'
       }
     },
+    // Server runtime configuration
+    serverAssets: [],
     rollupConfig: {
       onwarn(warning, warn) {
         // Suppress OpenAI 'this' keyword warnings
