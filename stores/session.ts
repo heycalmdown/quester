@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import type { Session, Message, Topic, LLMRequest } from '~/types'
+import type { Session, Message, Topic, LLMRequest, LLMResponse } from '~/types'
 
 export const useSessionStore = defineStore('session', {
   state: () => ({
@@ -124,7 +124,7 @@ export const useSessionStore = defineStore('session', {
         }
 
         // Get response from LLM
-        const response = await $fetch<{ message: string }>('/api/chat', {
+        const response = await $fetch<LLMResponse>('/api/chat', {
           method: 'POST',
           body: request
         })
@@ -138,6 +138,11 @@ export const useSessionStore = defineStore('session', {
         }
 
         this.currentSession.messages.push(assistantMessage)
+
+        // Process topic updates if present
+        if (response.topicUpdates) {
+          this.applyTopicUpdates(response.topicUpdates)
+        }
 
         // Save session
         await this.saveCurrentSession()
@@ -206,6 +211,99 @@ export const useSessionStore = defineStore('session', {
       this.currentSession.userPreferences = {
         preferredTerms,
         avoidedTerms
+      }
+    },
+
+    applyTopicUpdates(topicUpdates: NonNullable<LLMResponse['topicUpdates']>) {
+      if (!this.currentSession) return
+
+      // Update current topic if specified
+      if (topicUpdates.currentTopic) {
+        const currentTopicId = this.currentSession.currentTopic
+
+        // Check if this is a topic transition (new topic title different from current)
+        const currentTopic = currentTopicId ? this.currentSession.topics.find(t => t.id === currentTopicId) : null
+        const isTopicTransition = currentTopic &&
+          topicUpdates.currentTopic.title &&
+          topicUpdates.currentTopic.title !== currentTopic.title
+
+        if (isTopicTransition) {
+          // Move current topic to backlog
+          if (currentTopic) {
+            currentTopic.status = 'backlog'
+          }
+
+          // Create new current topic
+          const newTopic: Topic = {
+            id: generateTopicId(),
+            title: topicUpdates.currentTopic.title || 'Current Discussion',
+            priority: 1,
+            status: 'active',
+            questions: topicUpdates.currentTopic.questions || [],
+            notes: topicUpdates.currentTopic.notes || []
+          }
+          this.currentSession.topics.push(newTopic)
+          this.currentSession.currentTopic = newTopic.id
+        } else if (currentTopic) {
+          // Update existing topic with new information (same topic)
+          Object.assign(currentTopic, topicUpdates.currentTopic)
+        } else {
+          // Create new current topic if none exists
+          const newTopic: Topic = {
+            id: generateTopicId(),
+            title: topicUpdates.currentTopic.title || 'Current Discussion',
+            priority: 1,
+            status: 'active',
+            questions: topicUpdates.currentTopic.questions || [],
+            notes: topicUpdates.currentTopic.notes || []
+          }
+          this.currentSession.topics.push(newTopic)
+          this.currentSession.currentTopic = newTopic.id
+        }
+      }
+
+      // Add new topics to backlog (with duplicate prevention)
+      if (topicUpdates.newTopics && topicUpdates.newTopics.length > 0) {
+        const hasCurrentTopic = !!this.currentSession.currentTopic
+        const existingTopicTitles = this.currentSession.topics.map(t => t.title.toLowerCase())
+
+        for (let i = 0; i < topicUpdates.newTopics.length; i++) {
+          const newTopicData = topicUpdates.newTopics[i]
+          const isFirstNewTopic = i === 0
+          const topicTitle = newTopicData.title || 'Unnamed Topic'
+
+          // Skip if topic with same title already exists
+          if (existingTopicTitles.includes(topicTitle.toLowerCase())) {
+            continue
+          }
+
+          const newTopic: Topic = {
+            id: generateTopicId(),
+            title: topicTitle,
+            priority: newTopicData.priority || 2,
+            // If no current topic exists, make the first new topic active
+            status: (!hasCurrentTopic && isFirstNewTopic) ? 'active' : (newTopicData.status || 'backlog'),
+            questions: newTopicData.questions || [],
+            notes: newTopicData.notes || []
+          }
+
+          this.currentSession.topics.push(newTopic)
+
+          // Set the first new topic as current if no current topic exists
+          if (!hasCurrentTopic && isFirstNewTopic) {
+            this.currentSession.currentTopic = newTopic.id
+          }
+        }
+      }
+
+      // Apply backlog priority updates
+      if (topicUpdates.backlogUpdates && topicUpdates.backlogUpdates.length > 0) {
+        for (const update of topicUpdates.backlogUpdates) {
+          const topic = this.currentSession.topics.find(t => t.id === update.id)
+          if (topic) {
+            topic.priority = update.priority
+          }
+        }
       }
     },
 

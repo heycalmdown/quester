@@ -34,24 +34,32 @@ export async function createNewSession(title?: string): Promise<Session> {
 }
 
 export async function saveSessionToFile(sessionId: string, session: Session): Promise<void> {
-  await ensureSessionsDir()
+  try {
+    await ensureSessionsDir()
 
-  const sessionDir = join(SESSIONS_DIR, sessionId)
-  await fs.mkdir(sessionDir, { recursive: true })
+    const sessionDir = join(SESSIONS_DIR, sessionId)
+    await fs.mkdir(sessionDir, { recursive: true })
 
-  // Save session metadata as JSON
-  const metadataPath = join(sessionDir, 'session.json')
-  await fs.writeFile(metadataPath, JSON.stringify(session, null, 2))
+    // Save session metadata as JSON
+    const metadataPath = join(sessionDir, 'session.json')
+    const jsonData = JSON.stringify(session, null, 2)
+    await fs.writeFile(metadataPath, jsonData)
 
-  // Save messages as Markdown for human readability
-  const messagesPath = join(sessionDir, 'conversation.md')
-  const markdownContent = generateConversationMarkdown(session.messages)
-  await fs.writeFile(messagesPath, markdownContent)
+    // Save messages as Markdown for human readability
+    const messagesPath = join(sessionDir, 'conversation.md')
+    const markdownContent = generateConversationMarkdown(session.messages)
+    await fs.writeFile(messagesPath, markdownContent)
 
-  // Save topics as structured Markdown
-  const topicsPath = join(sessionDir, 'topics.md')
-  const topicsContent = generateTopicsMarkdown(session.topics)
-  await fs.writeFile(topicsPath, topicsContent)
+    // Save topics as structured Markdown
+    const topicsPath = join(sessionDir, 'topics.md')
+    const topicsContent = generateTopicsMarkdown(session.topics)
+    await fs.writeFile(topicsPath, topicsContent)
+  } catch (error) {
+    console.error('Error in saveSessionToFile:', error)
+    console.error('Session ID:', sessionId)
+    console.error('Session dir path:', join(SESSIONS_DIR, sessionId))
+    throw error
+  }
 }
 
 export async function readSessionFromFile(sessionId: string): Promise<Session> {

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$(date '+%Y-%m-%d %H:%M:%S') $(jq -r '.prompt')\\n\" >> \"$(git rev-parse --show-toplevel)/claude-prompts.log\""
+          }
+        ]
+      }
+    ]
+  }
+}
