@@ -64,10 +64,18 @@ Problem definition → small, safe change → change review → refactor — rep
 - Report failures with specific errors/messages.
 - Make tests serve as usage examples; include boundary and failure cases.
 
+## Git & PR Rules
+
+- **NEVER commit directly to main branch** - Always create a feature branch first
+- PR creation process: 1) Create feature branch, 2) Make changes and commit to feature branch, 3) Push feature branch, 4) Create PR
+- Branch naming: use `feature/description-of-change` or `fix/bug-description`
+- Keep PRs small and focused on a single change
+
 ## Anti-Pattern Rules
 
-- Don’t modify code without reading the whole context.
-- Don’t expose secrets.
-- Don’t ignore failures or warnings.
-- Don’t introduce unjustified optimization or abstraction.
-- Don’t overuse broad exceptions.
+- Don't modify code without reading the whole context.
+- Don't expose secrets.
+- Don't ignore failures or warnings.
+- Don't introduce unjustified optimization or abstraction.
+- Don't overuse broad exceptions.
+- Don't commit directly to main branch.
