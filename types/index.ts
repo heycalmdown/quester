@@ -8,7 +8,6 @@ export interface Message {
 export interface Topic {
   id: string
   title: string
-  priority: number
   status: 'active' | 'completed' | 'backlog'
   questions: string[]
   notes: string[]
@@ -39,11 +38,8 @@ export interface LLMRequest {
 
 export interface LLMResponse {
   message: string
-  suggestedQuestion?: string
   topicUpdates?: {
-    currentTopic?: Partial<Topic>
+    currentTopic?: { title: string }
     newTopics?: Partial<Topic>[]
-    backlogUpdates?: { id: string; priority: number }[]
   }
-  needsConfirmation?: boolean
 }

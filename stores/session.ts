@@ -22,7 +22,7 @@ export const useSessionStore = defineStore('session', {
       if (!state.currentSession) return []
       return state.currentSession.topics
         .filter(topic => topic.status === 'backlog')
-        .sort((a, b) => a.priority - b.priority)
+        .sort((a, b) => a.title.localeCompare(b.title))
     },
 
     completedTopics: (state) => {
@@ -157,13 +157,12 @@ export const useSessionStore = defineStore('session', {
       }
     },
 
-    addTopic(title: string, priority: number = 1) {
+    addTopic(title: string) {
       if (!this.currentSession) return
 
       const topic: Topic = {
         id: generateTopicId(),
         title,
-        priority,
         status: 'backlog',
         questions: [],
         notes: []
@@ -196,14 +195,6 @@ export const useSessionStore = defineStore('session', {
       }
     },
 
-    updateTopicPriority(topicId: string, newPriority: number) {
-      if (!this.currentSession) return
-
-      const topic = this.currentSession.topics.find(t => t.id === topicId)
-      if (topic) {
-        topic.priority = newPriority
-      }
-    },
 
     updateUserPreferences(preferredTerms: string[], avoidedTerms: string[]) {
       if (!this.currentSession) return
@@ -237,25 +228,23 @@ export const useSessionStore = defineStore('session', {
           const newTopic: Topic = {
             id: generateTopicId(),
             title: topicUpdates.currentTopic.title || 'Current Discussion',
-            priority: 1,
             status: 'active',
-            questions: topicUpdates.currentTopic.questions || [],
-            notes: topicUpdates.currentTopic.notes || []
+            questions: [],
+            notes: []
           }
           this.currentSession.topics.push(newTopic)
           this.currentSession.currentTopic = newTopic.id
         } else if (currentTopic) {
           // Update existing topic with new information (same topic)
-          Object.assign(currentTopic, topicUpdates.currentTopic)
+          currentTopic.title = topicUpdates.currentTopic.title || currentTopic.title
         } else {
           // Create new current topic if none exists
           const newTopic: Topic = {
             id: generateTopicId(),
             title: topicUpdates.currentTopic.title || 'Current Discussion',
-            priority: 1,
             status: 'active',
-            questions: topicUpdates.currentTopic.questions || [],
-            notes: topicUpdates.currentTopic.notes || []
+            questions: [],
+            notes: []
           }
           this.currentSession.topics.push(newTopic)
           this.currentSession.currentTopic = newTopic.id
@@ -280,7 +269,6 @@ export const useSessionStore = defineStore('session', {
           const newTopic: Topic = {
             id: generateTopicId(),
             title: topicTitle,
-            priority: newTopicData.priority || 2,
             // If no current topic exists, make the first new topic active
             status: (!hasCurrentTopic && isFirstNewTopic) ? 'active' : (newTopicData.status || 'backlog'),
             questions: newTopicData.questions || [],
@@ -296,15 +284,6 @@ export const useSessionStore = defineStore('session', {
         }
       }
 
-      // Apply backlog priority updates
-      if (topicUpdates.backlogUpdates && topicUpdates.backlogUpdates.length > 0) {
-        for (const update of topicUpdates.backlogUpdates) {
-          const topic = this.currentSession.topics.find(t => t.id === update.id)
-          if (topic) {
-            topic.priority = update.priority
-          }
-        }
-      }
     },
 
     clearSession() {

@@ -141,7 +141,7 @@ function generateTopicsMarkdown(topics: Topic[]): string {
   const content = topics.map(topic => {
     const status = topic.status.charAt(0).toUpperCase() + topic.status.slice(1)
 
-    let topicContent = `## ${topic.title} (${status} - Priority: ${topic.priority})\n\n`
+    let topicContent = `## ${topic.title} (${status})\n\n`
 
     if (topic.questions.length > 0) {
       topicContent += `### Questions\n\n${topic.questions.map(q => `- ${q}`).join('\n')}\n\n`

@@ -20,22 +20,69 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    // Convert our message format to OpenAI format
-    const openaiMessages = body.messages.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    }));
+    // Build system prompt with context
+    const instructions = buildSystemPrompt(body.context);
 
-    // Add system prompt for Quester behavior
-    const systemPrompt = buildSystemPrompt(body.context);
+    // Create input string from messages
+    const conversationHistory = body.messages
+      .map((msg) => `${msg.role}: ${msg.content}`)
+      .join("\n\n");
 
-    const completion = await openai.chat.completions.create({
-      model: "o4-mini",
-      messages: [{ role: "system", content: systemPrompt }, ...openaiMessages],
-      max_completion_tokens: 1500, // Increased from 500 to allow longer responses
+    const input = conversationHistory;
+
+    const model: string = config.openaiModel || "gpt-4o";
+
+    // Define JSON schema for structured output
+    const responseSchema = {
+      type: "object",
+      properties: {
+        message: {
+          type: "string",
+          description: "Your conversational response to the user",
+        },
+        topicUpdates: {
+          type: "object",
+          properties: {
+            currentTopic: {
+              type: "string",
+              description:
+                "The topic currently being discussed - always required and never empty",
+            },
+            newTopics: {
+              type: "array",
+              items: {
+                type: "string",
+              },
+              description:
+                "Array of new topics discovered but not part of current discussion (empty array if none)",
+            },
+          },
+          required: ["currentTopic", "newTopics"],
+          additionalProperties: false,
+        },
+      },
+      required: ["message", "topicUpdates"],
+      additionalProperties: false,
+    };
+
+    // Use the new Responses API with structured outputs
+    const completion = await openai.responses.create({
+      model,
+      instructions,
+      input,
+      max_output_tokens: 1500,
+      store: false, // Don't store for privacy
+      text: {
+        format: {
+          type: "json_schema",
+          name: "quester_response",
+          schema: responseSchema,
+          strict: true,
+        },
+      },
     });
 
-    const response = completion.choices[0]?.message?.content;
+    const response = completion.output_text;
 
     if (!response) {
       throw createError({
@@ -44,8 +91,9 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    // Parse response and extract structured information
-    const structuredResponse = parseQuesterResponse(response);
+    // Parse structured JSON response
+    console.log("response", response);
+    const structuredResponse = parseStructuredResponse(response);
 
     return structuredResponse;
   } catch (error: any) {
@@ -69,19 +117,21 @@ Key behaviors:
 - Maintain a topic backlog for side-topics to revisit later
 - Use divergence-convergence flow: broaden ideas, then narrow to key themes
 - Provide framing: occasionally summarize direction and confirm with user
+- IMPORTANT: Always respond in the same language that the user uses. Match their language exactly.
 
-IMPORTANT: After your response, if you detect new topics or side topics in the user's message, provide them in this exact format:
-[TOPICS]
-- Main Topic: [title if user is continuing current discussion]
-- New Topics: [comma-separated list of new topics mentioned]
-- Side Topics: [comma-separated list of tangential topics to save for later]
-[/TOPICS]
+Your response will be structured JSON with these fields:
+- message: Your conversational response to the user (in the same language as the user)
+- topicUpdates: Object containing topic detection results (always present)
+  - currentTopic: The topic currently being discussed (always required, never empty)
+  - newTopics: Array of new topics discovered but not part of current discussion (empty array if none)
 
-Guidelines:
-- If this is the FIRST topic mentioned in the conversation, put it in "New Topics" not "Main Topic"
-- If user shifts focus to a new topic or wants to discuss something else first, use "Main Topic"
-- If user clearly states what they want to explore or write about, ALWAYS include [TOPICS] section
-- Be proactive in detecting topics mentioned by users`;
+Guidelines for topic detection:
+- currentTopic must always be provided and represent what you're actively discussing with the user
+- If this is the very first message and user mentions a topic, set that as currentTopic
+- If user shifts focus to a new topic, update currentTopic accordingly
+- newTopics should contain any other topics mentioned that aren't the main focus of discussion
+- Be proactive in identifying the main conversational thread vs. tangential topics
+- Always provide a clear, descriptive currentTopic even for general conversations`;
 
   let prompt = basePrompt;
 
@@ -110,79 +160,53 @@ User preferences:
   return prompt;
 }
 
-function parseQuesterResponse(response: string): LLMResponse {
-  // Extract main message (everything before [TOPICS] section)
-  const topicsMatch = response.match(/\[TOPICS\]([\s\S]*?)\[\/TOPICS\]/);
-  const message = topicsMatch
-    ? response.replace(/\[TOPICS\][\s\S]*?\[\/TOPICS\]/, "").trim()
-    : response;
+function parseStructuredResponse(response: string): LLMResponse {
+  try {
+    // Parse the structured JSON response
+    const parsed = JSON.parse(response);
 
-  // Parse topic updates if present
-  let topicUpdates;
-  if (topicsMatch) {
-    const topicsSection = topicsMatch[1];
-    topicUpdates = parseTopicsSection(topicsSection);
-  }
-
-  return {
-    message,
-    needsConfirmation:
-      message.includes("Is that correct?") ||
-      message.includes("Does that sound right?"),
-    topicUpdates,
-  };
-}
-
-function parseTopicsSection(topicsText: string) {
-  const lines = topicsText
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  const updates: NonNullable<LLMResponse["topicUpdates"]> = {};
-
-  for (const line of lines) {
-    if (line.startsWith("- Main Topic:")) {
-      const title = line.replace("- Main Topic:", "").trim();
-      if (
-        title &&
-        title !== "[title if user is continuing current discussion]"
-      ) {
-        updates.currentTopic = { title };
-      }
-    } else if (line.startsWith("- New Topics:")) {
-      const topics = line.replace("- New Topics:", "").trim();
-      if (
-        topics &&
-        topics !== "[comma-separated list of new topics mentioned]"
-      ) {
-        updates.newTopics = topics.split(",").map((topic) => ({
-          title: topic.trim(),
-          priority: 2, // Medium priority for new topics
-          status: "backlog" as const,
-          questions: [],
-          notes: [],
-        }));
-      }
-    } else if (line.startsWith("- Side Topics:")) {
-      const topics = line.replace("- Side Topics:", "").trim();
-      if (
-        topics &&
-        topics !==
-          "[comma-separated list of tangential topics to save for later]"
-      ) {
-        const sideTopics = topics.split(",").map((topic) => ({
-          title: topic.trim(),
-          priority: 3, // Lower priority for side topics
-          status: "backlog" as const,
-          questions: [],
-          notes: [],
-        }));
-        updates.newTopics = updates.newTopics
-          ? [...updates.newTopics, ...sideTopics]
-          : sideTopics;
-      }
+    // Validate required fields
+    if (
+      !parsed.message ||
+      !parsed.topicUpdates ||
+      !parsed.topicUpdates.currentTopic
+    ) {
+      throw new Error("Missing required fields");
     }
-  }
 
-  return Object.keys(updates).length > 0 ? updates : undefined;
+    // Transform topic structure for our internal format
+    const allNewTopics = [];
+
+    // Add newTopics as simple topic objects
+    if (
+      Array.isArray(parsed.topicUpdates.newTopics) &&
+      parsed.topicUpdates.newTopics.length > 0
+    ) {
+      allNewTopics.push(
+        ...parsed.topicUpdates.newTopics.map((topicTitle: string) => ({
+          title: topicTitle,
+          status: "backlog" as const,
+          questions: [],
+          notes: [],
+        }))
+      );
+    }
+
+    const topicUpdates = {
+      currentTopic: { title: parsed.topicUpdates.currentTopic },
+      newTopics: allNewTopics.length > 0 ? allNewTopics : undefined,
+    };
+
+    return {
+      message: parsed.message,
+      topicUpdates,
+    };
+  } catch (error) {
+    // Fallback to legacy parsing for backwards compatibility
+    console.warn("Failed to parse structured response:", error);
+    return {
+      message: response,
+      topicUpdates: undefined,
+    };
+  }
 }

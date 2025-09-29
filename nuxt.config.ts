@@ -18,6 +18,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     // Private keys (only available on server-side)
     openaiApiKey: '',
+    openaiModel: 'gpt-4o',
 
     // Public keys (exposed to client-side)
     public: {

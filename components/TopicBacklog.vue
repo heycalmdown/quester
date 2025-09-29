@@ -14,7 +14,6 @@
       >
         <div class="flex-1">
           <div class="font-medium text-gray-900">{{ topic.title }}</div>
-          <div class="text-sm text-gray-500">Priority: {{ topic.priority }}</div>
         </div>
         <div class="flex space-x-2">
           <UButton
@@ -24,18 +23,6 @@
           >
             Discuss
           </UButton>
-          <UButton
-            size="xs"
-            variant="ghost"
-            icon="i-heroicons-arrow-up"
-            @click="$emit('increase-priority', topic.id)"
-          />
-          <UButton
-            size="xs"
-            variant="ghost"
-            icon="i-heroicons-arrow-down"
-            @click="$emit('decrease-priority', topic.id)"
-          />
         </div>
       </div>
     </div>
@@ -70,8 +57,6 @@ interface Props {
 interface Emits {
   (e: 'set-current', topicId: string): void
   (e: 'complete-topic', topicId: string): void
-  (e: 'increase-priority', topicId: string): void
-  (e: 'decrease-priority', topicId: string): void
 }
 
 defineProps<Props>()
