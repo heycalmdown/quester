@@ -2,7 +2,15 @@ import { promises as fs } from 'fs'
 import { join } from 'path'
 import type { Session, Message, Topic } from '~/types'
 
+const SESSION_DIR_PATTERN = /^session_(\d+)_/i
 const SESSIONS_DIR = join(process.cwd(), 'sessions')
+
+interface SessionMetadata {
+  id: string
+  title: string | undefined
+  updatedAt: Date
+  directoryTimestamp: number
+}
 
 async function ensureSessionsDir() {
   try {
@@ -86,37 +94,84 @@ export async function readSessionFromFile(sessionId: string): Promise<Session> {
 }
 
 export async function listSessions(): Promise<{ id: string; title?: string; updatedAt: Date }[]> {
+  const metadata = await collectSessionMetadata()
+  return metadata.map(({ id, title, updatedAt }) => ({ id, title, updatedAt }))
+}
+
+export async function getLatestSession(): Promise<Session | null> {
+  const metadata = await collectSessionMetadata()
+
+  for (const entry of metadata) {
+    try {
+      return await readSessionFromFile(entry.id)
+    } catch (error) {
+      console.warn('Skipping unreadable session during latest lookup:', entry.id, error)
+    }
+  }
+
+  return null
+}
+
+function generateSessionId(): string {
+  return `session_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+}
+
+function parseDirectoryTimestamp(sessionId: string): number | null {
+  const match = SESSION_DIR_PATTERN.exec(sessionId)
+
+  if (!match) {
+    return null
+  }
+
+  const timestamp = Number(match[1])
+  return Number.isFinite(timestamp) ? timestamp : null
+}
+
+async function collectSessionMetadata(): Promise<SessionMetadata[]> {
   await ensureSessionsDir()
 
   try {
     const entries = await fs.readdir(SESSIONS_DIR, { withFileTypes: true })
     const sessionDirs = entries.filter(entry => entry.isDirectory())
 
-    const sessions = await Promise.all(
+    const metadata = await Promise.all(
       sessionDirs.map(async (dir) => {
+        const directoryTimestamp = parseDirectoryTimestamp(dir.name)
+
+        if (directoryTimestamp === null) {
+          console.warn('Skipping session directory with unexpected name pattern:', dir.name)
+          return null
+        }
+
         try {
           const session = await readSessionFromFile(dir.name)
           return {
             id: session.id,
-            title: session.title,
-            updatedAt: session.updatedAt
+            title: session.title ?? undefined,
+            updatedAt: session.updatedAt,
+            directoryTimestamp
           }
-        } catch {
+        } catch (error) {
+          console.warn('Failed to read session metadata:', dir.name, error)
           return null
         }
       })
     )
 
-    return sessions
-      .filter(Boolean)
-      .sort((a, b) => b!.updatedAt.getTime() - a!.updatedAt.getTime()) as { id: string; title?: string; updatedAt: Date }[]
-  } catch {
+    return metadata
+      .filter((entry): entry is SessionMetadata => entry !== null)
+      .sort((a, b) => {
+        const timestampDiff = b.directoryTimestamp - a.directoryTimestamp
+        if (timestampDiff !== 0) {
+          return timestampDiff
+        }
+
+        return b.updatedAt.getTime() - a.updatedAt.getTime()
+      })
+  } catch (error) {
+    console.warn('Failed to collect session metadata:', error)
     return []
   }
-}
-
-function generateSessionId(): string {
-  return `session_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
 }
 
 function generateConversationMarkdown(messages: Message[]): string {

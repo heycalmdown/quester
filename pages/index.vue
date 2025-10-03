@@ -33,7 +33,14 @@
     <!-- Main Content -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <!-- Welcome Screen -->
-      <div v-if="!sessionStore.hasActiveSession" class="text-center py-12">
+      <div v-if="sessionStore.isLoading && !sessionStore.hasActiveSession" class="text-center py-12">
+        <div class="flex flex-col items-center space-y-4">
+          <UIcon name="i-heroicons-arrow-path" class="w-10 h-10 text-blue-500 animate-spin" />
+          <p class="text-lg text-gray-600">Restoring your last session...</p>
+        </div>
+      </div>
+
+      <div v-else-if="!sessionStore.hasActiveSession" class="text-center py-12">
         <div class="max-w-2xl mx-auto">
           <UIcon name="i-heroicons-chat-bubble-left-ellipsis" class="w-16 h-16 text-blue-500 mx-auto mb-6" />
           <h2 class="text-2xl font-bold text-gray-900 mb-4">
@@ -114,6 +121,10 @@ const toast = useToast()
 
 // Computed
 const messages = computed(() => sessionStore.currentSession?.messages || [])
+
+onMounted(() => {
+  sessionStore.resumeLatestSession()
+})
 
 // Methods
 async function startNewSession() {
