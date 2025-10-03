@@ -1,5 +1,8 @@
 import { defineStore } from 'pinia'
+import type { FetchOptions } from 'ofetch'
 import type { Session, Message, Topic, LLMRequest, LLMResponse } from '~/types'
+
+type SessionIdRoute = `/api/sessions/${string}`
 
 export const useSessionStore = defineStore('session', {
   state: () => ({
@@ -38,12 +41,12 @@ export const useSessionStore = defineStore('session', {
 
       try {
         const response = await $fetch<Session>('/api/sessions', {
-          method: 'POST',
+          method: 'post',
           body: { title }
         })
 
-        this.currentSession = response
-        return response
+        this.currentSession = normalizeSession(response)
+        return this.currentSession
       } catch (error) {
         this.error = 'Failed to create new session'
         console.error('Error creating session:', error)
@@ -59,12 +62,33 @@ export const useSessionStore = defineStore('session', {
 
       try {
         const session = await $fetch<Session>(`/api/sessions/${sessionId}`)
-        this.currentSession = session
-        return session
+        this.currentSession = normalizeSession(session)
+        return this.currentSession
       } catch (error) {
         this.error = 'Failed to load session'
         console.error('Error loading session:', error)
         throw error
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    async resumeLatestSession() {
+      this.isLoading = true
+
+      try {
+        const session = await $fetch<Session | null>('/api/sessions/latest')
+
+        if (!session) {
+          this.currentSession = null
+          return false
+        }
+
+        this.currentSession = normalizeSession(session)
+        return true
+      } catch (error) {
+        console.error('Error resuming latest session:', error)
+        return false
       } finally {
         this.isLoading = false
       }
@@ -81,10 +105,14 @@ export const useSessionStore = defineStore('session', {
       try {
         this.currentSession.updatedAt = new Date()
 
-        await $fetch(`/api/sessions/${this.currentSession.id}`, {
-          method: 'POST',
+        const sessionRoute: SessionIdRoute = `/api/sessions/${this.currentSession.id}`
+        const updateOptions: FetchOptions<'json', Session> = {
+          method: 'post',
           body: this.currentSession
-        })
+        }
+
+        // Nitro route typing cannot match our interpolated ID, so we cast to runtime-compatible shape.
+        await $fetch(sessionRoute as any, updateOptions as any)
       } catch (error) {
         this.error = 'Failed to save session'
         console.error('Error saving session:', error)
@@ -125,7 +153,7 @@ export const useSessionStore = defineStore('session', {
 
         // Get response from LLM
         const response = await $fetch<LLMResponse>('/api/chat', {
-          method: 'POST',
+          method: 'post',
           body: request
         })
 
@@ -292,6 +320,18 @@ export const useSessionStore = defineStore('session', {
     }
   }
 })
+
+function normalizeSession(session: Session): Session {
+  return {
+    ...session,
+    createdAt: new Date(session.createdAt),
+    updatedAt: new Date(session.updatedAt),
+    messages: session.messages.map(message => ({
+      ...message,
+      timestamp: new Date(message.timestamp)
+    }))
+  }
+}
 
 function generateMessageId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
