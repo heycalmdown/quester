@@ -1,10 +1,10 @@
-# AGENTS.md
+# CLAUDE.md
 
 Problem definition → small, safe change → change review → refactor — repeat the loop.
 
 ## Session Start Rules
 
-- At the beginning of every new session, ALWAYS read @PRD.md and @ARCHITECTURE.md files to understand the product requirements and technical constraints.
+- At the beginning of every new session, ALWAYS read @PRD.md, @ARCHITECTURE.md, and @CONTRIBUTION.md files to understand the product requirements, technical guardrails, and contribution workflow.
 - Use this context to inform all development decisions and ensure alignment with project goals.
 
 ## Mandatory Rules
