@@ -1,7 +1,10 @@
 import OpenAI from "openai";
-import type { LLMRequest, LLMResponse } from "~/types";
+import type { LLMRequest, LLMResponse, Message } from "~/types";
 import { runOrchestrator } from "../agents/orchestrator";
 import { runInterviewer } from "../agents/interviewer";
+import { runWriter } from "../agents/writer";
+import { loadDraft, saveDraft } from "../utils/draftPersistence";
+import { runInBackground, startTask, completeTask, failTask } from "../utils/backgroundTasks";
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig();
@@ -76,6 +79,61 @@ export default defineEventHandler(async (event) => {
           }
         : undefined,
     };
+
+    // Step 4: Trigger Writer Agent in background (non-blocking)
+    const sessionId = body.sessionId;
+    const currentTopicId = body.context?.currentTopic?.id;
+
+    if (sessionId && currentTopicId) {
+      runInBackground(
+        async () => {
+          try {
+            startTask(sessionId, currentTopicId, 'draft_generation');
+
+            // Filter messages by current topic (simplified - matches all for now)
+            const topicMessages = body.messages;
+
+            // Load previous draft if exists
+            const previousDraft = await loadDraft(sessionId, currentTopicId);
+
+            // Run Writer Agent
+            const writerResult = await runWriter(
+              {
+                topicId: currentTopicId,
+                topicTitle: orchestratorResult?.currentTopic || body.context?.currentTopic?.title || "Discussion",
+                topicMessages,
+                previousDraft: previousDraft ? {
+                  sections: previousDraft.sections,
+                  completeness: previousDraft.completeness
+                } : undefined,
+                updateMode: previousDraft ? 'incremental' : 'full_revision'
+              },
+              openai,
+              model
+            );
+
+            // Save draft
+            await saveDraft(sessionId, {
+              topicId: currentTopicId,
+              topicTitle: orchestratorResult?.currentTopic || body.context?.currentTopic?.title || "Discussion",
+              sections: writerResult.sections,
+              completeness: writerResult.completeness,
+              missingAspects: writerResult.missingAspects,
+              updatedAt: new Date().toISOString()
+            });
+
+            completeTask(sessionId, currentTopicId);
+            console.log(`Draft generated for topic ${currentTopicId} (${writerResult.completeness}% complete)`);
+          } catch (error: any) {
+            failTask(sessionId, currentTopicId, error?.message || 'Unknown error');
+            console.error('Writer Agent background task failed:', error);
+          }
+        },
+        (error) => {
+          console.error('Unhandled error in Writer background task:', error);
+        }
+      );
+    }
 
     return response;
   } catch (error: any) {

@@ -28,6 +28,7 @@ export interface Session {
 }
 
 export interface LLMRequest {
+  sessionId: string
   messages: Message[]
   context?: {
     currentTopic?: Topic
@@ -42,4 +43,35 @@ export interface LLMResponse {
     currentTopic?: { title: string }
     newTopics?: Partial<Topic>[]
   }
+}
+
+export interface DraftSection {
+  title: string
+  content: string
+}
+
+export interface Draft {
+  topicId: string
+  topicTitle: string
+  sections: DraftSection[]
+  completeness: number
+  missingAspects: string[]
+  updatedAt: string
+}
+
+export interface DraftMetadata {
+  topicId: string
+  topicTitle: string
+  completeness: number
+  updatedAt: string
+}
+
+export interface BackgroundTask {
+  sessionId: string
+  taskType: 'draft_generation'
+  topicId: string
+  status: 'running' | 'completed' | 'failed'
+  startedAt: string
+  completedAt?: string
+  error?: string
 }

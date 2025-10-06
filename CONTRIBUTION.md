@@ -16,6 +16,7 @@ Follow these rules before making any changes:
      - `README.md`: Complete specification document (in English)
      - `CHECKLIST.md`: User-facing verification checklist (externally testable items only)
    - Do not pre-check checklist items; leave them unchecked for manual verification.
+   - CHECKLIST.md should focus on end-to-end user behavior, not API endpoints or internal implementation details.
 
 4. **Validate Spec Quality Continuously**
    - During implementation, regularly confirm with the user whether the spec needs refinement.

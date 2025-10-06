@@ -143,6 +143,7 @@ export const useSessionStore = defineStore('session', {
 
         // Prepare request for LLM
         const request: LLMRequest = {
+          sessionId: this.currentSession.id,
           messages: this.currentSession.messages,
           context: {
             currentTopic: this.currentTopic || undefined,

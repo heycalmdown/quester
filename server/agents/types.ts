@@ -28,3 +28,24 @@ export interface InterviewerInput {
 export interface InterviewerOutput {
   message: string;
 }
+
+// Writer Agent Types
+export interface WriterInput {
+  topicId: string;
+  topicTitle: string;
+  topicMessages: Message[];
+  previousDraft?: {
+    sections: Array<{ title: string; content: string }>;
+    completeness: number;
+  };
+  updateMode: 'incremental' | 'full_revision';
+}
+
+export interface WriterOutput {
+  sections: Array<{
+    title: string;
+    content: string;
+  }>;
+  completeness: number;
+  missingAspects: string[];
+}
