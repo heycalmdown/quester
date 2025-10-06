@@ -81,14 +81,16 @@ Guidelines for topic detection:
 - If user shifts focus to a new topic, update currentTopic accordingly
 - newTopics should contain any other topics mentioned that aren't the main focus of discussion
 - Be proactive in identifying the main conversational thread vs. tangential topics
-- Always provide a clear, descriptive currentTopic even for general conversations`;
+- Always provide a clear, descriptive currentTopic even for general conversations
+- IMPORTANT: If there is a current active topic and the conversation continues on the same topic, you MUST return the EXACT same topic title. Do not rephrase, expand, or modify it in any way.`;
 
   let prompt = basePrompt;
 
   if (input.currentTopic) {
     prompt += `
 
-Current active topic: "${input.currentTopic.title}"`;
+Current active topic: "${input.currentTopic.title}"
+IMPORTANT: If the conversation is still about this same topic, return EXACTLY: "${input.currentTopic.title}"`;
   }
 
   if (input.existingTopics.length > 0) {
