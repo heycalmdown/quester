@@ -77,7 +77,7 @@
             </div>
 
             <!-- Messages -->
-            <div class="flex-1 overflow-y-auto p-4 space-y-4">
+            <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
               <div v-if="messages.length === 0" class="text-center text-gray-500 py-8">
                 <p>No messages yet. Start the conversation!</p>
               </div>
@@ -123,9 +123,18 @@
 <script setup>
 const sessionStore = useSessionStore()
 const toast = useToast()
+const messagesContainer = ref(null)
 
 // Computed
 const messages = computed(() => sessionStore.currentSession?.messages || [])
+
+// Auto-scroll to bottom when messages update
+watch(messages, async () => {
+  await nextTick()
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  }
+}, { deep: true })
 
 onMounted(async () => {
   await sessionStore.resumeLatestSession()
