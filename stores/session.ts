@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import type { FetchOptions } from 'ofetch'
-import type { Session, Message, Topic, LLMRequest, LLMResponse } from '~/types'
+import type { Session, Message, Topic, LLMRequest, LLMResponse, Draft } from '~/types'
 
 type SessionIdRoute = `/api/sessions/${string}`
 
@@ -8,7 +8,11 @@ export const useSessionStore = defineStore('session', {
   state: () => ({
     currentSession: null as Session | null,
     isLoading: false,
-    error: null as string | null
+    error: null as string | null,
+    currentDraft: null as Draft | null,
+    selectedDraftTopicId: null as string | null,
+    isDraftLoading: false,
+    draftError: null as string | null
   }),
 
   getters: {
@@ -38,6 +42,11 @@ export const useSessionStore = defineStore('session', {
     async createNewSession(title?: string) {
       this.isLoading = true
       this.error = null
+
+      // Clear draft state when creating new session
+      this.currentDraft = null
+      this.selectedDraftTopicId = null
+      this.draftError = null
 
       try {
         const response = await $fetch<Session>('/api/sessions', {
@@ -318,6 +327,47 @@ export const useSessionStore = defineStore('session', {
     clearSession() {
       this.currentSession = null
       this.error = null
+      this.currentDraft = null
+      this.selectedDraftTopicId = null
+      this.draftError = null
+    },
+
+    async fetchDraftByTopicId(topicId: string) {
+      if (!this.currentSession) {
+        throw new Error('No active session')
+      }
+
+      this.isDraftLoading = true
+      this.draftError = null
+
+      try {
+        const draft = await $fetch<Draft>(`/api/sessions/${this.currentSession.id}/drafts/${topicId}`)
+        this.currentDraft = draft
+        return draft
+      } catch (error: any) {
+        // If draft doesn't exist yet (404), set to null without error
+        if (error.statusCode === 404) {
+          this.currentDraft = null
+          return null
+        }
+
+        this.draftError = 'Failed to load draft'
+        console.error('Error fetching draft:', error)
+        throw error
+      } finally {
+        this.isDraftLoading = false
+      }
+    },
+
+    async selectDraftTopic(topicId: string) {
+      this.selectedDraftTopicId = topicId
+      await this.fetchDraftByTopicId(topicId)
+    },
+
+    clearDraftSelection() {
+      this.selectedDraftTopicId = null
+      this.currentDraft = null
+      this.draftError = null
     }
   }
 })
