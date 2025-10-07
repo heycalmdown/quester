@@ -61,11 +61,11 @@
         </div>
       </div>
 
-      <!-- Active Session -->
-      <div v-else class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        <!-- Chat Area -->
-        <div class="lg:col-span-3">
-          <div class="bg-white rounded-lg shadow">
+      <!-- Active Session: Three-Panel Layout -->
+      <div v-else class="flex h-[calc(100vh-16rem)] gap-4">
+        <!-- Chat Panel (40%) -->
+        <div class="flex w-[40%] flex-col">
+          <div class="flex h-full flex-col rounded-lg bg-white shadow">
             <!-- Session Header -->
             <div class="border-b p-4">
               <h2 class="text-lg font-medium text-gray-900">
@@ -77,7 +77,7 @@
             </div>
 
             <!-- Messages -->
-            <div class="h-96 overflow-y-auto p-4 space-y-4">
+            <div class="flex-1 overflow-y-auto p-4 space-y-4">
               <div v-if="messages.length === 0" class="text-center text-gray-500 py-8">
                 <p>No messages yet. Start the conversation!</p>
               </div>
@@ -96,16 +96,21 @@
           </div>
         </div>
 
-        <!-- Sidebar -->
-        <div class="lg:col-span-1">
-          <TopicBacklog
+        <!-- Topics Panel (20%) -->
+        <div class="w-[20%]">
+          <TopicsPanel
             :backlog-topics="sessionStore.backlogTopics"
             :current-topic="sessionStore.currentTopic"
+            :selected-draft-topic-id="sessionStore.selectedDraftTopicId"
             @set-current="handleSetCurrentTopic"
             @complete-topic="handleCompleteTopic"
-            @increase-priority="handleIncreasePriority"
-            @decrease-priority="handleDecreasePriority"
+            @select-draft="handleSelectDraft"
           />
+        </div>
+
+        <!-- Drafts Panel (40%) -->
+        <div class="w-[40%]">
+          <DraftsPanel />
         </div>
       </div>
     </main>
@@ -122,8 +127,20 @@ const toast = useToast()
 // Computed
 const messages = computed(() => sessionStore.currentSession?.messages || [])
 
-onMounted(() => {
-  sessionStore.resumeLatestSession()
+onMounted(async () => {
+  await sessionStore.resumeLatestSession()
+
+  // Auto-select current topic's draft if available
+  if (sessionStore.currentTopic) {
+    sessionStore.selectDraftTopic(sessionStore.currentTopic.id)
+  }
+})
+
+// Watch for current topic changes and auto-select its draft
+watch(() => sessionStore.currentTopic, (newTopic) => {
+  if (newTopic) {
+    sessionStore.selectDraftTopic(newTopic.id)
+  }
 })
 
 // Methods
@@ -174,18 +191,8 @@ function handleCompleteTopic(topicId) {
   sessionStore.completeTopic(topicId)
 }
 
-function handleIncreasePriority(topicId) {
-  const topic = sessionStore.currentSession?.topics.find(t => t.id === topicId)
-  if (topic && topic.priority > 1) {
-    sessionStore.updateTopicPriority(topicId, topic.priority - 1)
-  }
-}
-
-function handleDecreasePriority(topicId) {
-  const topic = sessionStore.currentSession?.topics.find(t => t.id === topicId)
-  if (topic) {
-    sessionStore.updateTopicPriority(topicId, topic.priority + 1)
-  }
+function handleSelectDraft(topicId) {
+  sessionStore.selectDraftTopic(topicId)
 }
 
 function formatDate(date) {

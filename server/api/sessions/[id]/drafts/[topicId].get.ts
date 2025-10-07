@@ -22,17 +22,19 @@ export default defineEventHandler(async (event) => {
     const draft = await loadDraft(sessionId, topicId)
 
     if (!draft) {
-      return {
-        exists: false,
-        draft: null
-      }
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Draft not found'
+      })
     }
 
-    return {
-      exists: true,
-      draft
+    return draft
+  } catch (error: any) {
+    // If draft doesn't exist, return 404
+    if (error.statusCode === 404) {
+      throw error
     }
-  } catch (error) {
+
     console.error('Failed to load draft:', error)
     throw createError({
       statusCode: 500,
